@@ -1,6 +1,6 @@
 import { ArrowLeft, Check, Plus, Calendar, FileText } from "lucide-react";
 import { motion } from "framer-motion";
-import type { FarmActivity } from "@/pages/FarmManagement";
+import type { FarmActivity } from "@/lib/dataService";
 import { useState } from "react";
 
 interface ActivityTimelineProps {

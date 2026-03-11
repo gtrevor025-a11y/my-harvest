@@ -2,12 +2,12 @@ import { useState } from "react";
 import { X, Wheat, Fish, Hexagon } from "lucide-react";
 import { Bug as Cow } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import type { FarmActivity, FarmTask } from "@/pages/FarmManagement";
+import type { FarmActivity, FarmTask } from "@/lib/dataService";
 
 interface CreateActivitySheetProps {
   open: boolean;
   onClose: () => void;
-  onAdd: (activity: FarmActivity) => void;
+  onAdd: (activity: Omit<FarmActivity, "id">) => void;
 }
 
 const activityTypes = [
@@ -79,8 +79,8 @@ const CreateActivitySheet = ({ open, onClose, onAdd }: CreateActivitySheetProps)
 
   const handleSubmit = () => {
     if (!type || !name.trim()) return;
-    const activity: FarmActivity = {
-      id: crypto.randomUUID(),
+    const activity = {
+      userId: "",
       type,
       name: name.trim(),
       location: location.trim() || "Not specified",
