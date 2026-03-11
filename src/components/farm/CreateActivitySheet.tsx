@@ -2,7 +2,7 @@ import { useState } from "react";
 import { X, Wheat, Fish, Hexagon } from "lucide-react";
 import { Bug as Cow } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import type { FarmActivity, FarmTask } from "@/pages/FarmManagement";
+import type { FarmActivity, FarmTask } from "@/lib/dataService";
 
 interface CreateActivitySheetProps {
   open: boolean;
