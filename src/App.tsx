@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import Marketplace from "./pages/Marketplace";
 import Community from "./pages/Community";
 import Toolkit from "./pages/Toolkit";
+import FarmManagement from "./pages/FarmManagement";
 import Profile from "./pages/Profile";
 import Onboarding from "./pages/Onboarding";
 import SearchPage from "./pages/SearchPage";
