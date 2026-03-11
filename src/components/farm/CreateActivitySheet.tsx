@@ -79,8 +79,8 @@ const CreateActivitySheet = ({ open, onClose, onAdd }: CreateActivitySheetProps)
 
   const handleSubmit = () => {
     if (!type || !name.trim()) return;
-    const activity: Omit<FarmActivity, "id"> = {
-      id: crypto.randomUUID(),
+    const activity = {
+      userId: "",
       type,
       name: name.trim(),
       location: location.trim() || "Not specified",
