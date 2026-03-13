@@ -10,6 +10,7 @@ import Marketplace from "./pages/Marketplace";
 import Community from "./pages/Community";
 import Toolkit from "./pages/Toolkit";
 import FarmManagement from "./pages/FarmManagement";
+import FarmAssistant from "./pages/FarmAssistant";
 import Profile from "./pages/Profile";
 import Onboarding from "./pages/Onboarding";
 import Login from "./pages/Login";
