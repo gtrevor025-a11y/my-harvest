@@ -41,6 +41,7 @@ const App = () => (
             <Route path="/community" element={<Community />} />
             <Route path="/toolkit" element={<Toolkit />} />
             <Route path="/farm" element={<FarmManagement />} />
+            <Route path="/assistant" element={<FarmAssistant />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/login" element={<Login />} />
