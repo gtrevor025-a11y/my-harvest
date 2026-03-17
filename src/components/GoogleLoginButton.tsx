@@ -3,7 +3,12 @@ import { supabase } from "../services/supabaseClient";
 
 export const GoogleLoginButton: React.FC = () => {
   const handleGoogleLogin = async () => {
-    const { data, error } = await supabase.auth.signInWithOAuth({ provider: "google" });
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: "https://my-harvest.vercel.app"
+      }
+    });
     if (error) console.error("Google login error:", error.message);
   };
 
