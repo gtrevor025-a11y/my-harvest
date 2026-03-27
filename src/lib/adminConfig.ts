@@ -1,11 +1,26 @@
-export const ADMIN_EMAILS = [
-  "gtrevor025@gmail.com",
-  "tngure20@gmail.com",
-];
+import { supabase } from "@/services/supabaseClient";
 
-export function isAdminEmail(email: string | null | undefined): boolean {
-  if (!email) return false;
-  return ADMIN_EMAILS.includes(email.toLowerCase().trim());
+const ADMIN_SESSION_KEY = "harvest_admin_session";
+
+export async function checkIsAdmin(userId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from("admins")
+      .select("id")
+      .eq("id", userId)
+      .single();
+    return !error && !!data;
+  } catch {
+    return false;
+  }
+}
+
+export function setAdminSession(email: string) {
+  localStorage.setItem(ADMIN_SESSION_KEY, email);
+}
+
+export function clearAdminSession() {
+  localStorage.removeItem(ADMIN_SESSION_KEY);
 }
 
 const SETTINGS_KEY = "harvest_site_settings";

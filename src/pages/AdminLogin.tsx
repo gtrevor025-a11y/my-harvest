@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Leaf, Shield, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 import { supabase } from "@/services/supabaseClient";
-import { isAdminEmail } from "@/lib/adminConfig";
+import { checkIsAdmin, setAdminSession } from "@/lib/adminConfig";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -18,12 +18,6 @@ const AdminLogin = () => {
     setLoading(true);
     setError("");
 
-    if (!isAdminEmail(email)) {
-      setError("This account does not have admin access.");
-      setLoading(false);
-      return;
-    }
-
     const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
 
     if (authError) {
@@ -32,14 +26,22 @@ const AdminLogin = () => {
       return;
     }
 
-    if (!data.session || !isAdminEmail(data.session.user.email)) {
+    if (!data.session) {
+      setError("Sign in failed. Please try again.");
+      setLoading(false);
+      return;
+    }
+
+    const isAdmin = await checkIsAdmin(data.session.user.id);
+
+    if (!isAdmin) {
       await supabase.auth.signOut();
       setError("This account does not have admin access.");
       setLoading(false);
       return;
     }
 
-    localStorage.setItem("harvest_admin_session", data.session.user.email!);
+    setAdminSession(data.session.user.email!);
     navigate("/admin");
     setLoading(false);
   };
@@ -62,7 +64,7 @@ const AdminLogin = () => {
         <div className="harvest-card p-6">
           <div className="mb-4 flex items-center gap-2 rounded-lg bg-primary/5 px-3 py-2">
             <Shield className="h-4 w-4 text-primary" />
-            <span className="text-xs text-muted-foreground">Secure admin authentication via Supabase</span>
+            <span className="text-xs text-muted-foreground">Secured via Supabase authentication</span>
           </div>
 
           {error && (

@@ -1,11 +1,15 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import AppLayout from "@/components/AppLayout";
-import { Bot, Send, Lightbulb, Stethoscope, CalendarDays, ArrowLeft, BookOpen, ExternalLink, AlertTriangle } from "lucide-react";
+import {
+  Bot, Send, Lightbulb, Stethoscope, CalendarDays, ArrowLeft,
+  BookOpen, ExternalLink, AlertTriangle, Sparkles, BarChart2, Cpu,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { getFarmActivities } from "@/lib/dataService";
-import { getGuidance, getActivityAdvice, type AssistantMode, type GuidanceResponse, type KnowledgeSource } from "@/lib/agricultureKnowledge";
+import { type AssistantMode, type GuidanceResponse, type KnowledgeSource } from "@/lib/agricultureKnowledge";
+import { askAI, buildDailyTipsQuery, buildFarmAnalysisQuery } from "@/services/aiService";
 import ReactMarkdown from "react-markdown";
 
 interface ChatMessage {
@@ -13,13 +17,14 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   guidance?: GuidanceResponse;
+  source?: "knowledge-base" | "ai-model";
   timestamp: Date;
 }
 
-const modes: { id: AssistantMode; label: string; icon: typeof Lightbulb; desc: string }[] = [
-  { id: "advice", label: "Advice", icon: Lightbulb, desc: "General farming guidance" },
-  { id: "diagnosis", label: "Diagnosis", icon: Stethoscope, desc: "Troubleshoot problems" },
-  { id: "planning", label: "Planning", icon: CalendarDays, desc: "Plan farm activities" },
+const modes: { id: AssistantMode; label: string; icon: typeof Lightbulb; desc: string; placeholder: string }[] = [
+  { id: "advice", label: "Q&A", icon: Lightbulb, desc: "Ask any farming question", placeholder: "Ask a farming question..." },
+  { id: "diagnosis", label: "Diagnose", icon: Stethoscope, desc: "Troubleshoot problems", placeholder: "Describe the problem with your crop or animal..." },
+  { id: "planning", label: "Plan", icon: CalendarDays, desc: "Plan & schedule", placeholder: "What do you need help planning?" },
 ];
 
 const quickQuestions: Record<AssistantMode, string[]> = {
@@ -105,9 +110,9 @@ const FarmAssistant = () => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, isTyping]);
 
-  const handleSend = (text?: string) => {
+  const handleSend = useCallback(async (text?: string) => {
     const query = (text || input).trim();
-    if (!query) return;
+    if (!query || isTyping) return;
 
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
@@ -119,19 +124,45 @@ const FarmAssistant = () => {
     setInput("");
     setIsTyping(true);
 
-    // Simulate processing delay
-    setTimeout(() => {
-      const guidance = getGuidance(query, mode);
+    try {
+      const response = await askAI({
+        mode,
+        query,
+        userId: user?.id,
+        farmActivities,
+      });
+
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: guidance.summary,
-        guidance,
+        content: response.content,
+        guidance: response.guidance,
+        source: response.source,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, assistantMsg]);
+    } catch (err) {
+      console.error("[FarmAssistant] AI error:", err);
+      const errMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: "Sorry, I had trouble answering that. Please try again.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errMsg]);
+    } finally {
       setIsTyping(false);
-    }, 800 + Math.random() * 700);
+    }
+  }, [input, isTyping, mode, user?.id, farmActivities]);
+
+  const handleDailyTips = () => {
+    setMode("planning");
+    handleSend(buildDailyTipsQuery(farmActivities));
+  };
+
+  const handleFarmAnalysis = () => {
+    setMode("planning");
+    handleSend(buildFarmAnalysisQuery(farmActivities));
   };
 
   if (!isAuthenticated) {
@@ -151,25 +182,34 @@ const FarmAssistant = () => {
     );
   }
 
+  const currentMode = modes.find((m) => m.id === mode)!;
+
   return (
     <AppLayout>
       <div className="flex flex-col" style={{ height: "calc(100vh - 8rem)" }}>
+
         {/* Header */}
         <div className="px-4 py-3 border-b bg-card">
           <div className="flex items-center gap-3 mb-3">
             <button onClick={() => navigate(-1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
               <ArrowLeft className="h-4 w-4" />
             </button>
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
                 <Bot className="h-5 w-5 text-primary" />
               </div>
-              <div>
-                <h1 className="text-sm font-bold text-foreground">Farm Assistant</h1>
-                <p className="text-[11px] text-muted-foreground">Agricultural guidance powered by verified sources</p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h1 className="text-sm font-bold text-foreground">Farm Assistant</h1>
+                  <span className="flex items-center gap-0.5 rounded-full bg-harvest-green-100 px-1.5 py-0.5 text-[9px] font-semibold text-harvest-green-600">
+                    <Cpu className="h-2.5 w-2.5" /> AI
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground truncate">Agricultural guidance · {currentMode.desc}</p>
               </div>
             </div>
           </div>
+
           {/* Mode tabs */}
           <div className="flex gap-1 rounded-xl bg-muted p-1">
             {modes.map((m) => (
@@ -191,23 +231,45 @@ const FarmAssistant = () => {
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
           {messages.length === 0 ? (
             <div className="space-y-4">
-              <div className="text-center py-6">
-                <Bot className="mx-auto h-10 w-10 text-primary/40 mb-2" />
-                <p className="text-sm text-muted-foreground">
-                  {mode === "advice" && "Ask me anything about farming — crops, livestock, soil, and more."}
+              <div className="text-center py-4">
+                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+                  <Bot className="h-7 w-7 text-primary" />
+                </div>
+                <p className="text-sm font-semibold text-foreground">Hello{user?.name ? `, ${user.name.split(" ")[0]}` : ""}!</p>
+                <p className="mt-1 text-xs text-muted-foreground max-w-xs mx-auto">
+                  {mode === "advice" && "Ask me anything about crops, livestock, soil, or any farming challenge."}
                   {mode === "diagnosis" && "Describe a problem with your crops or animals and I'll help diagnose it."}
-                  {mode === "planning" && "Let me help you plan planting schedules, fertilizer applications, or harvest timing."}
+                  {mode === "planning" && "Let me help you plan planting schedules, fertilizer applications, or your next steps."}
                 </p>
               </div>
 
+              {/* Quick action buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleDailyTips}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border bg-card px-3 py-2.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-harvest-gold-500" />
+                  Today's Tips
+                </button>
+                <button
+                  onClick={handleFarmAnalysis}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border bg-card px-3 py-2.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                >
+                  <BarChart2 className="h-3.5 w-3.5 text-primary" />
+                  Analyze My Farm
+                </button>
+              </div>
+
+              {/* Farm activities */}
               {farmActivities.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Your farm activities:</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">From your farm:</p>
                   <div className="flex flex-wrap gap-2">
                     {farmActivities.map((a) => (
                       <button
                         key={a.id}
-                        onClick={() => handleSend(`Advice for my ${a.species || a.type} (${a.name})`)}
+                        onClick={() => handleSend(`Give me advice for my ${a.species || a.type} (${a.name})`)}
                         className="rounded-full border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
                       >
                         {a.name}
@@ -217,8 +279,9 @@ const FarmAssistant = () => {
                 </div>
               )}
 
+              {/* Quick questions */}
               <div>
-                <p className="text-xs font-medium text-muted-foreground mb-2">Quick questions:</p>
+                <p className="text-xs font-medium text-muted-foreground mb-2">Try asking:</p>
                 <div className="flex flex-wrap gap-2">
                   {quickQuestions[mode].map((q) => (
                     <button
@@ -241,8 +304,13 @@ const FarmAssistant = () => {
                   animate={{ opacity: 1, y: 0 }}
                   className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
+                  {msg.role === "assistant" && (
+                    <div className="mr-2 mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                      <Bot className="h-4 w-4 text-primary" />
+                    </div>
+                  )}
                   <div
-                    className={`max-w-[90%] rounded-2xl px-4 py-3 ${
+                    className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                       msg.role === "user"
                         ? "bg-primary text-primary-foreground rounded-br-md"
                         : "bg-card border rounded-bl-md"
@@ -253,22 +321,34 @@ const FarmAssistant = () => {
                     ) : msg.guidance ? (
                       <GuidanceCard guidance={msg.guidance} />
                     ) : (
-                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <div className="prose prose-sm dark:prose-invert max-w-none text-foreground [&>h2]:text-sm [&>h2]:font-bold [&>h3]:text-xs [&>h3]:font-semibold [&>p]:text-sm [&>ul]:text-sm [&>blockquote]:text-xs [&>blockquote]:text-muted-foreground [&>hr]:my-2">
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       </div>
                     )}
-                    <p className={`mt-1 text-[10px] ${msg.role === "user" ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
-                      {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </p>
+                    <div className={`mt-1 flex items-center gap-1.5 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                      <p className={`text-[10px] ${msg.role === "user" ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                        {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                      {msg.source === "ai-model" && (
+                        <span className="flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-medium text-primary">
+                          <Cpu className="h-2 w-2" /> AI
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </motion.div>
               ))}
               <AnimatePresence>
                 {isTyping && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex gap-1 px-4 py-2">
-                    <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
-                    <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "150ms" }} />
-                    <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10">
+                      <Bot className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="flex gap-1 rounded-2xl rounded-bl-md bg-card border px-4 py-3">
+                      <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -278,23 +358,34 @@ const FarmAssistant = () => {
 
         {/* Input */}
         <div className="border-t bg-card px-4 py-3">
+          {messages.length > 0 && (
+            <div className="mb-2 flex gap-1.5 overflow-x-auto scrollbar-none pb-1">
+              <button onClick={handleDailyTips} className="shrink-0 flex items-center gap-1 rounded-full border bg-background px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted">
+                <Sparkles className="h-3 w-3" /> Today's Tips
+              </button>
+              <button onClick={handleFarmAnalysis} className="shrink-0 flex items-center gap-1 rounded-full border bg-background px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted">
+                <BarChart2 className="h-3 w-3" /> Farm Analysis
+              </button>
+              {quickQuestions[mode].slice(0, 2).map((q) => (
+                <button key={q} onClick={() => handleSend(q)} className="shrink-0 rounded-full border bg-background px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted">
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <input
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder={
-                mode === "advice" ? "Ask a farming question..." :
-                mode === "diagnosis" ? "Describe the problem..." :
-                "What do you want to plan?"
-              }
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+              placeholder={currentMode.placeholder}
               className="flex-1 rounded-xl border bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary"
             />
             <button
               onClick={() => handleSend()}
               disabled={!input.trim() || isTyping}
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 transition-opacity"
             >
               <Send className="h-4 w-4" />
             </button>

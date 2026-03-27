@@ -16,7 +16,7 @@ import {
   type User, type Post, type MarketplaceListing, type Alert, type Article, type Expert,
 } from "@/lib/dataService";
 import { supabase } from "@/services/supabaseClient";
-import { isAdminEmail, getSiteSettings, updateSiteSettings, type SiteSettings } from "@/lib/adminConfig";
+import { checkIsAdmin, clearAdminSession, getSiteSettings, updateSiteSettings, type SiteSettings } from "@/lib/adminConfig";
 
 type Tab = "overview" | "users" | "posts" | "marketplace" | "alerts" | "articles" | "experts" | "settings";
 
@@ -38,20 +38,28 @@ const AdminDashboard = () => {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      const email = data.session?.user?.email ?? null;
-      if (!email || !isAdminEmail(email)) {
-        localStorage.removeItem("harvest_admin_session");
+    supabase.auth.getSession().then(async ({ data }) => {
+      const user = data.session?.user;
+      if (!user) {
+        clearAdminSession();
+        navigate("/admin/login", { replace: true });
+        setChecking(false);
+        return;
+      }
+      const isAdmin = await checkIsAdmin(user.id);
+      if (!isAdmin) {
+        clearAdminSession();
+        await supabase.auth.signOut();
         navigate("/admin/login", { replace: true });
       } else {
-        setAdminEmail(email);
+        setAdminEmail(user.email ?? null);
       }
       setChecking(false);
     });
   }, [navigate]);
 
   const handleLogout = async () => {
-    localStorage.removeItem("harvest_admin_session");
+    clearAdminSession();
     await supabase.auth.signOut();
     navigate("/admin/login");
   };
@@ -222,13 +230,6 @@ const PostsPanel = () => {
   const [posts, setPosts] = useState<Post[]>(getPosts());
   const refresh = () => setPosts(getPosts());
 
-  const handleDelete = (id: string) => {
-    if (confirm("Delete this post?")) {
-      deletePost(id);
-      refresh();
-    }
-  };
-
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
       {posts.length === 0 && <p className="py-12 text-center text-sm text-muted-foreground">No posts yet.</p>}
@@ -244,7 +245,7 @@ const PostsPanel = () => {
                 {post.reported && <span className="text-destructive font-medium">⚠️ Reported</span>}
               </div>
             </div>
-            <button onClick={() => handleDelete(post.id)} className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+            <button onClick={() => { if (confirm("Delete this post?")) { deletePost(post.id); refresh(); }}} className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
               <Trash2 className="h-4 w-4" />
             </button>
           </div>
@@ -305,11 +306,6 @@ const AlertsPanel = () => {
     refresh();
   };
 
-  const toggleActive = (id: string, active: boolean) => {
-    updateAlert(id, { active: !active });
-    refresh();
-  };
-
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
       <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
@@ -356,7 +352,7 @@ const AlertsPanel = () => {
               <p className="mt-0.5 text-xs text-muted-foreground">{alert.text}</p>
             </div>
             <div className="flex gap-1">
-              <button onClick={() => toggleActive(alert.id, alert.active)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted" title={alert.active ? "Deactivate" : "Activate"}>
+              <button onClick={() => { updateAlert(alert.id, { active: !alert.active }); refresh(); }} className="rounded-lg p-2 text-muted-foreground hover:bg-muted" title={alert.active ? "Deactivate" : "Activate"}>
                 {alert.active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
               <button onClick={() => { deleteAlert(alert.id); refresh(); }} className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
@@ -486,8 +482,6 @@ const SiteSettingsPanel = () => {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 max-w-2xl">
-
-      {/* Branding */}
       <div className="harvest-card p-5 space-y-4">
         <h3 className="text-sm font-bold text-foreground">Branding</h3>
         <div className="space-y-3">
@@ -502,7 +496,6 @@ const SiteSettingsPanel = () => {
         </div>
       </div>
 
-      {/* Announcement Banner */}
       <div className="harvest-card p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-foreground">Announcement Banner</h3>
@@ -511,7 +504,7 @@ const SiteSettingsPanel = () => {
         <textarea
           value={settings.announcementBanner}
           onChange={(e) => update("announcementBanner", e.target.value)}
-          placeholder="Write a platform-wide announcement message..."
+          placeholder="Write a platform-wide announcement..."
           rows={3}
           disabled={!settings.announcementEnabled}
           className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:border-primary placeholder:text-muted-foreground disabled:opacity-50"
@@ -523,7 +516,6 @@ const SiteSettingsPanel = () => {
         )}
       </div>
 
-      {/* Feature Flags */}
       <div className="harvest-card p-5 space-y-3">
         <h3 className="text-sm font-bold text-foreground">Features</h3>
         <ToggleRow label="Marketplace" description="Allow users to post and view listings" checked={settings.enableMarketplace} onChange={(v) => update("enableMarketplace", v)} />
@@ -532,14 +524,12 @@ const SiteSettingsPanel = () => {
         <ToggleRow label="Farm Assistant AI" description="Enable the AI-powered farm assistant" checked={settings.enableFarmAssistant} onChange={(v) => update("enableFarmAssistant", v)} />
       </div>
 
-      {/* User Controls */}
       <div className="harvest-card p-5 space-y-3">
         <h3 className="text-sm font-bold text-foreground">User Controls</h3>
         <ToggleRow label="Allow New Signups" description="Let new users create accounts" checked={settings.allowNewSignups} onChange={(v) => update("allowNewSignups", v)} />
         <ToggleRow label="Require Listing Approval" description="New marketplace listings need admin approval before going live" checked={settings.requireApprovalForListings} onChange={(v) => update("requireApprovalForListings", v)} />
       </div>
 
-      {/* Maintenance Mode */}
       <div className={`harvest-card p-5 space-y-3 ${settings.maintenanceMode ? "border-destructive/40" : ""}`}>
         <div className="flex items-center justify-between">
           <div>
