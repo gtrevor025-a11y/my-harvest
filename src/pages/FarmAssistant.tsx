@@ -11,7 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { type AssistantMode, type GuidanceResponse, type KnowledgeSource } from "@/lib/agricultureKnowledge";
 import { askAI, buildDailyTipsQuery, buildFarmAnalysisQuery } from "@/services/aiService";
 import { logAIRequest, resolveAIRequest, failAIRequest, uploadFarmMedia } from "@/services/farmService";
-import { getFarmActivities } from "@/lib/dataService";
+import { fetchFarmRecords, type FarmRecord } from "@/services/farmService";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 
@@ -97,12 +97,17 @@ const FarmAssistant = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [pendingImage, setPendingImage] = useState<PendingImage | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [farmRecords, setFarmRecords] = useState<FarmRecord[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sessionIdRef = useRef(crypto.randomUUID());
 
-  const farmActivities = isAuthenticated ? getFarmActivities(user?.id) : [];
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchFarmRecords().then(setFarmRecords).catch(() => {});
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -185,7 +190,7 @@ const FarmAssistant = () => {
         mode: hasImage ? "diagnosis" : mode,
         query: aiQuery,
         userId: user?.id,
-        farmActivities,
+        farmRecords,
       });
 
       const assistantMsg: ChatMessage = {
@@ -210,16 +215,16 @@ const FarmAssistant = () => {
     } finally {
       setIsTyping(false);
     }
-  }, [input, isTyping, mode, user?.id, farmActivities, pendingImage]);
+  }, [input, isTyping, mode, user?.id, farmRecords, pendingImage]);
 
   const handleDailyTips = () => {
     setMode("planning");
-    handleSend(buildDailyTipsQuery(farmActivities));
+    handleSend(buildDailyTipsQuery(farmRecords));
   };
 
   const handleFarmAnalysis = () => {
     setMode("planning");
-    handleSend(buildFarmAnalysisQuery(farmActivities));
+    handleSend(buildFarmAnalysisQuery(farmRecords));
   };
 
   if (!isAuthenticated) {
@@ -320,12 +325,12 @@ const FarmAssistant = () => {
               </div>
 
               {/* Farm activity context chips */}
-              {farmActivities.length > 0 && (
+              {farmRecords.length > 0 && (
                 <div>
                   <p className="mb-2 text-xs font-medium text-muted-foreground">From your farm:</p>
                   <div className="flex flex-wrap gap-2">
-                    {farmActivities.map(a => (
-                      <button key={a.id} onClick={() => handleSend(`Give me advice for my ${a.species || a.type} (${a.name})`)}
+                    {farmRecords.map(a => (
+                      <button key={a.id} onClick={() => handleSend(`Give me advice for my ${a.cropType || a.recordType} (${a.name})`)}
                         className="rounded-full border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted">
                         {a.name}
                       </button>
