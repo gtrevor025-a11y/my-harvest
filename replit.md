@@ -24,52 +24,46 @@ src/
     home/              # Home page components
     onboarding/        # Onboarding flow components
   contexts/
-    AuthContext.tsx    # Auth state — handles local email/password AND Supabase OAuth sessions
+    AuthContext.tsx    # Auth state — handles Supabase sessions (email/password + Google OAuth)
   services/
     supabaseClient.ts  # Supabase client + signInWithGoogle() helper
     profileService.ts  # User profile sync
     socialService.ts   # Supabase social data layer (posts, reactions, comments, communities, media)
+    farmService.ts     # Supabase farm data layer (records, activities, tasks, notifications, AI requests)
     aiService.ts       # AI farm assistant with fallback knowledge base
-    newsService.ts     # Location-aware agri news (4-tier: county→national→regional→global)
+    newsService.ts     # Location-aware agri news (4-tier: county->national->regional->global)
+    marketplaceService.ts  # Marketplace listings (currently localStorage-backed)
   lib/
-    dataService.ts     # localStorage CRUD still used by marketplace, farm, admin features
+    dataService.ts     # localStorage CRUD used by some features
     agricultureKnowledge.ts  # AI knowledge base fallback
+    adminConfig.ts     # Admin role checking
     utils.ts
   hooks/               # Custom React hooks
+supabase/              # SQL schema files (run in Supabase SQL editor)
+  social_schema.sql
+  farm_schema.sql
+  extended_schema.sql
 ```
 
-## Social / Community Features (Supabase-backed)
-Tables: `posts`, `post_reactions`, `post_comments`, `communities`, `community_members`
-- SQL migration: `supabase/social_schema.sql` — run once in Supabase SQL editor
-- Storage bucket: `post-media` (public, 10 MB limit, image/video)
-- Database triggers auto-maintain `like_count`, `dislike_count`, `comment_count`, `member_count`
-- RLS policies: readable by all, mutations only by authenticated owners
-- Routes: `/community` (feed + community cards), `/community/:id` (community detail page)
-- Components: `PostCard`, `CreatePostSheet`, `CreateCommunitySheet`, `SocialFeed` (home widget)
-- All social data flows through `src/services/socialService.ts`
+## Supabase Tables
+- `profiles` — User metadata
+- `posts`, `post_reactions`, `post_comments` — Social feed
+- `communities`, `community_members` — Social groups
+- `farm_records`, `farm_activities`, `farm_tasks`, `farm_notifications` — Farm management
+- `ai_requests` — AI assistant interaction log
 
-## Environment Variables (set as shared env vars)
-- `VITE_SUPABASE_URL` = https://gciybjlwambconeyhigk.supabase.co
-- `VITE_SUPABASE_ANON_KEY` = sb_publishable_KiQb_bzkykVoxWnD4cX5jA_8XT0alXQ
-- `VITE_GOOGLE_CLIENT_ID` = 506962736220-7j30f6ss1n6nch9h45nlnus9rrfnjpj4.apps.googleusercontent.com
-
-## Auth Architecture
-The app has two auth layers that work together:
-1. **Local email/password auth** — stored in localStorage via AuthContext
-2. **Supabase OAuth (Google)** — AuthContext listens to `supabase.auth.onAuthStateChange` and maps Supabase users to the local User type automatically
-
-Google OAuth flow: User clicks → Supabase → Google → back to `window.location.origin`
-
-## Supabase Configuration
-- Project URL: https://gciybjlwambconeyhigk.supabase.co
-- OAuth callback: https://gciybjlwambconeyhigk.supabase.co/auth/v1/callback
-- Replit dev domain must be in Supabase's allowed redirect URLs
+## Environment Variables (set as shared env vars in Replit)
+- `VITE_SUPABASE_URL` — Supabase project URL
+- `VITE_SUPABASE_ANON_KEY` — Supabase anon/public key (full JWT)
+- `VITE_GOOGLE_CLIENT_ID` — Google OAuth client ID
+- `VITE_APP_URL` — App URL (update after deploying)
 
 ## Running the App
-- Development: `npm run dev` (serves on port 5000)
+- Development: `npm run dev` (serves on port 8080, mapped to external port 80)
 - Build: `npm run build`
 
 ## Key Notes
-- Migrated from Lovable to Replit — `lovable-tagger` plugin removed from vite config
-- Vite configured for Replit: `host: "0.0.0.0"`, `port: 5000`, `allowedHosts: true`
-- The floating `GoogleLoginButton` component was removed from App.tsx; Google sign-in is embedded directly in Login and Signup pages
+- Pure frontend SPA — no custom Node.js server. Supabase is the backend.
+- Migrated from Lovable/Vercel to Replit. Vite configured with `host: "0.0.0.0"`, `allowedHosts: true`.
+- Google OAuth redirect must include the Replit dev domain in Supabase's allowed redirect URLs.
+- The `.env` file stores Supabase credentials for local dev; shared env vars are the authoritative source in Replit.
