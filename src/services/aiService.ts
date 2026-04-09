@@ -23,7 +23,7 @@ export interface AIRequest {
   mode: AssistantMode;
   query: string;
   userId?: string;
-  farmActivities?: FarmRecord[];
+  farmRecords?: FarmRecord[];
 }
 
 export interface AIResponse {
@@ -34,7 +34,7 @@ export interface AIResponse {
 
 // ─── System prompt builder ────────────────────────────────────────────────────
 
-function buildSystemPrompt(mode: AssistantMode, farmActivities?: FarmRecord[]): string {
+function buildSystemPrompt(mode: AssistantMode, farmRecords?: FarmRecord[]): string {
   const modeInstructions: Record<AssistantMode, string> = {
     advice: `You are a knowledgeable agricultural advisor specializing in East African farming.
 Answer questions about crops, livestock, soil health, irrigation, pest management, and general farming.
@@ -59,8 +59,8 @@ Provide concrete schedules and timelines.`,
   })}. The current month is ${new Date().toLocaleString("en-KE", { month: "long" })}.`;
 
   const farmContext =
-    farmActivities && farmActivities.length > 0
-      ? `\n\nFarmer's current farm records:\n${farmActivities
+    farmRecords && farmRecords.length > 0
+      ? `\n\nFarmer's current farm records:\n${farmRecords
           .map((a) => `- ${a.name} (${a.recordType}${a.cropType ? ` / ${a.cropType}` : ""}) — ${a.healthStatus}`)
           .join("\n")}`
       : "";
@@ -90,22 +90,22 @@ Always end responses with a brief disclaimer about consulting local extension of
 
 // ─── Daily tips prompt ────────────────────────────────────────────────────────
 
-export function buildDailyTipsQuery(farmActivities?: FarmRecord[]): string {
+export function buildDailyTipsQuery(farmRecords?: FarmRecord[]): string {
   const month = new Date().toLocaleString("en-KE", { month: "long" });
   const activities =
-    farmActivities && farmActivities.length > 0
-      ? ` My current activities are: ${farmActivities.map((a) => a.name).join(", ")}.`
+    farmRecords && farmRecords.length > 0
+      ? ` My current activities are: ${farmRecords.map((a) => a.name).join(", ")}.`
       : "";
   return `Give me 5 practical farming tips for ${month} in Kenya that I should act on this week.${activities} Focus on seasonal tasks, pest alerts, and market opportunities.`;
 }
 
 // ─── Farm analysis prompt ─────────────────────────────────────────────────────
 
-export function buildFarmAnalysisQuery(farmActivities: FarmRecord[]): string {
-  if (farmActivities.length === 0) {
+export function buildFarmAnalysisQuery(farmRecords: FarmRecord[]): string {
+  if (farmRecords.length === 0) {
     return "I haven't added any farm records yet. What should I start tracking to improve my farm management?";
   }
-  const summary = farmActivities
+  const summary = farmRecords
     .map((a) => `${a.name} (${a.recordType}${a.cropType ? `/${a.cropType}` : ""}) — health: ${a.healthStatus}`)
     .join("; ");
   return `Analyze my farm and give me a priority action plan. My records: ${summary}. What should I focus on this week and what risks should I watch for?`;
@@ -194,8 +194,8 @@ function guidanceToMarkdown(guidance: GuidanceResponse): string {
 // ─── Main exported function ───────────────────────────────────────────────────
 
 export async function askAI(request: AIRequest): Promise<AIResponse> {
-  const { mode, query, farmActivities } = request;
-  const systemPrompt = buildSystemPrompt(mode, farmActivities);
+  const { mode, query, farmRecords } = request;
+  const systemPrompt = buildSystemPrompt(mode, farmRecords);
 
   try {
     const content = await callAIEndpoint(systemPrompt, query);
