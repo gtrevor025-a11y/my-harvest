@@ -97,12 +97,17 @@ const FarmAssistant = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [pendingImage, setPendingImage] = useState<PendingImage | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [farmRecords, setFarmRecords] = useState<FarmRecord[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sessionIdRef = useRef(crypto.randomUUID());
 
-  const farmActivities = isAuthenticated ? getFarmActivities(user?.id) : [];
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchFarmRecords().then(setFarmRecords).catch(() => {});
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
