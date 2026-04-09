@@ -15,7 +15,7 @@ import {
   type AssistantMode,
   type GuidanceResponse,
 } from "@/lib/agricultureKnowledge";
-import type { FarmActivity } from "@/lib/dataService";
+import type { FarmRecord } from "@/services/farmService";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
