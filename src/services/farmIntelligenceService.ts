@@ -26,7 +26,7 @@ export async function runFarmIntelligence(
       ai_generated: true,
     }));
 
-    supabase.from("tasks").insert(tasks).then(() => {}).catch(() => {});
+    supabase.from("tasks").insert(tasks).then(() => {}, () => {});
   }
 
   // Save alerts (non-blocking)
@@ -37,7 +37,7 @@ export async function runFarmIntelligence(
       message: a.message,
     }));
 
-    supabase.from("alerts").insert(alerts).then(() => {}).catch(() => {});
+    supabase.from("alerts").insert(alerts).then(() => {}, () => {});
   }
 
   return result;
