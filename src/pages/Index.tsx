@@ -10,6 +10,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Leaf, ArrowRight, MapPin } from "lucide-react";
 import { motion } from "framer-motion";
+import { runFarmIntelligence } from "@/services/farmIntelligenceService";
+import { fetchFarmRecords } from "@/services/farmService";
 
 function getGreeting(): string {
   const h = new Date().getHours();
