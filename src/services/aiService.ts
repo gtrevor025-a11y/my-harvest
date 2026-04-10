@@ -20,12 +20,25 @@ export interface AIRequest {
 
 export interface AIResponse {
   content: string;
-  actions?: any[];
-  alerts?: any[];
-  guidance?: GuidanceResponse;
+
+  // 🧠 structured brain output (NEW)
+  actions?: {
+    title: string;
+    priority: "low" | "medium" | "high";
+    due_date?: string;
+  }[];
+
+  alerts?: {
+    level: "low" | "medium" | "high";
+    message: string;
+  }[];
+
+  insights?: string[];
+
+  confidence?: number;
+
   source: "knowledge-base" | "ai-model";
 }
-
 // ─── Config ──────────────────────────────────────────────
 
 const endpoint = import.meta.env.VITE_AI_ENDPOINT;
