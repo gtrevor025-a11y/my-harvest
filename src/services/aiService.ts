@@ -148,3 +148,27 @@ export async function runAI(payload: {
 export function buildDailyTipsQuery() {
   return `Give 5 simple farming tips for this week.`;
 }
+export function buildFarmAnalysisQuery(
+  question: string,
+  farmRecords?: FarmRecord[]
+) {
+  const context = farmRecords?.length
+    ? farmRecords.map(r => `${r.name} (${r.recordType}) - ${r.healthStatus}`).join("\n")
+    : "No farm data";
+
+  return `
+Farmer question:
+"${question}"
+
+Farm context:
+${context}
+
+Give:
+1. Diagnosis (if possible)
+2. Clear cause
+3. Step-by-step solution
+4. Preventive measures
+
+Be specific. Avoid generic advice.
+`;
+}
