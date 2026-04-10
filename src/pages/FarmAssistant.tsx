@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { type AssistantMode, type GuidanceResponse, type KnowledgeSource } from "@/lib/agricultureKnowledge";
-import { askAI, buildDailyTipsQuery, buildFarmAnalysisQuery } from "@/services/aiService";
+import { askAI, buildDailyTipsQuery } from "@/services/aiService";
 import { logAIRequest, resolveAIRequest, failAIRequest, uploadFarmMedia } from "@/services/farmService";
 import { fetchFarmRecords, type FarmRecord } from "@/services/farmService";
 import ReactMarkdown from "react-markdown";
