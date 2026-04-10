@@ -157,19 +157,21 @@ export async function runAI(payload: {
   prompt?: string;
 }) {
   const res = await fetch(
-    "https://YOUR_SUPABASE_PROJECT.functions.supabase.co/ai-diagnosis",
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-diagnosis`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        imageUrl: payload.imageUrl,
+        prompt: payload.prompt || "Analyze crop disease",
+      }),
     }
   );
 
   return res.json();
 }
-
 // ─── HELPERS ───────────────────────────────────────────
 
 export function buildDailyTipsQuery() {
