@@ -1,13 +1,5 @@
 /**
- * AI Service Layer — Harvest Farm Assistant
- *
- * Model-agnostic design. Swap to a real LLM by setting:
- *   VITE_AI_ENDPOINT  — OpenAI-compatible base URL (e.g. https://api-inference.huggingface.co/v1)
- *   VITE_AI_API_KEY   — API key / HuggingFace token
- *   VITE_AI_MODEL     — Model name (e.g. mistralai/Mixtral-8x7B-Instruct-v0.1)
- *
- * When those vars are absent, the service falls back to the local knowledge base
- * so the app remains fully functional without any API key.
+ * AI Service Layer — Harvest Farm Assistant (Production Ready)
  */
 
 import {
@@ -17,7 +9,7 @@ import {
 } from "@/lib/agricultureKnowledge";
 import type { FarmRecord } from "@/services/farmService";
 
-// ─── Public types ─────────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────
 
 export interface AIRequest {
   mode: AssistantMode;
@@ -32,182 +24,155 @@ export interface AIResponse {
   source: "knowledge-base" | "ai-model";
 }
 
-// ─── System prompt builder ────────────────────────────────────────────────────
+// ─── Config ──────────────────────────────────────────────
+
+const endpoint = import.meta.env.VITE_AI_ENDPOINT;
+const apiKey = import.meta.env.VITE_AI_API_KEY;
+const model = import.meta.env.VITE_AI_MODEL || "mistralai/Mistral-7B-Instruct-v0.2";
+
+const AI_TIMEOUT_MS = 25000;
+
+// ─── System Prompt ───────────────────────────────────────
 
 function buildSystemPrompt(mode: AssistantMode, farmRecords?: FarmRecord[]): string {
   const modeInstructions: Record<AssistantMode, string> = {
-    advice: `You are a knowledgeable agricultural advisor specializing in East African farming.
-Answer questions about crops, livestock, soil health, irrigation, pest management, and general farming.
-Base your answers on verified agronomic science and local Kenyan/East African farming practices.
-Keep answers practical, actionable, and suitable for smallholder farmers.`,
+    advice: `You are an expert agricultural advisor for East African smallholder farmers.
+Give practical, actionable farming advice. Avoid theory.`,
 
-    diagnosis: `You are an expert agricultural diagnostician for East African farms.
-Help farmers identify and treat crop diseases, pest infestations, livestock illnesses, and other farm problems.
-When diagnosing, ask about symptoms, location, severity, and duration.
-Always recommend consulting a local vet or extension officer for serious issues.`,
+    diagnosis: `You are an agricultural diagnostician.
+Help identify crop and livestock problems based on symptoms.
+Always suggest possible causes and immediate actions.`,
 
-    planning: `You are a strategic farm planning assistant for East African smallholder farmers.
-Help with planting calendars, seasonal scheduling, fertilizer plans, budgeting, and farm activity management.
-Reference Kenya's long rains (March–May) and short rains (October–December) seasons where relevant.
-Provide concrete schedules and timelines.`,
+    planning: `You are a farm planning assistant.
+Help with seasonal planning, fertilizer schedules, and farm optimization.`,
   };
 
-  const dailyTipsContext = `Today is ${new Date().toLocaleDateString("en-KE", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  })}. The current month is ${new Date().toLocaleString("en-KE", { month: "long" })}.`;
-
   const farmContext =
-    farmRecords && farmRecords.length > 0
-      ? `\n\nFarmer's current farm records:\n${farmRecords
-          .map((a) => `- ${a.name} (${a.recordType}${a.cropType ? ` / ${a.cropType}` : ""}) — ${a.healthStatus}`)
+    farmRecords?.length
+      ? `\nFarmer Data:\n${farmRecords
+          .map(
+            (f) =>
+              `- ${f.name} (${f.recordType}${
+                f.cropType ? `/${f.cropType}` : ""
+              }) — ${f.healthStatus}`
+          )
           .join("\n")}`
       : "";
 
-  const knowledgeSources = `
-Verified knowledge sources to reference:
-- Kenya Ministry of Agriculture (kilimo.go.ke)
-- KALRO — Kenya Agricultural & Livestock Research Organization
-- FAO — Food and Agriculture Organization
-- ICIPE — International Centre of Insect Physiology and Ecology
-- ILRI — International Livestock Research Institute
-- Kenya Agricultural Extension Service`;
+  return `
+${modeInstructions[mode]}
 
-  return `${modeInstructions[mode]}
+Current Date: ${new Date().toLocaleDateString("en-KE")}
 
-${dailyTipsContext}${farmContext}
-${knowledgeSources}
+${farmContext}
 
-Format responses clearly using markdown:
-- Use **bold** for important terms and actions
-- Use bullet points for lists of steps or recommendations
-- Use ## headings to separate major sections
-- Keep language simple and accessible to farmers who may be reading on mobile
+Rules:
+- Be practical and concise
+- Give step-by-step actions
+- Avoid long explanations
+- Always prioritize farmer safety
 
-Always end responses with a brief disclaimer about consulting local extension officers for site-specific advice.`;
+End with: "Consult a local extension officer for confirmation."
+`;
 }
 
-// ─── Daily tips prompt ────────────────────────────────────────────────────────
+// ─── Timeout wrapper ─────────────────────────────────────
 
-export function buildDailyTipsQuery(farmRecords?: FarmRecord[]): string {
-  const month = new Date().toLocaleString("en-KE", { month: "long" });
-  const activities =
-    farmRecords && farmRecords.length > 0
-      ? ` My current activities are: ${farmRecords.map((a) => a.name).join(", ")}.`
-      : "";
-  return `Give me 5 practical farming tips for ${month} in Kenya that I should act on this week.${activities} Focus on seasonal tasks, pest alerts, and market opportunities.`;
+function fetchWithTimeout(url: string, options: RequestInit, timeout: number) {
+  return Promise.race([
+    fetch(url, options),
+    new Promise<Response>((_, reject) =>
+      setTimeout(() => reject(new Error("AI_TIMEOUT")), timeout)
+    ),
+  ]);
 }
 
-// ─── Farm analysis prompt ─────────────────────────────────────────────────────
+// ─── AI API Call ─────────────────────────────────────────
 
-export function buildFarmAnalysisQuery(farmRecords: FarmRecord[]): string {
-  if (farmRecords.length === 0) {
-    return "I haven't added any farm records yet. What should I start tracking to improve my farm management?";
-  }
-  const summary = farmRecords
-    .map((a) => `${a.name} (${a.recordType}${a.cropType ? `/${a.cropType}` : ""}) — health: ${a.healthStatus}`)
-    .join("; ");
-  return `Analyze my farm and give me a priority action plan. My records: ${summary}. What should I focus on this week and what risks should I watch for?`;
-}
-
-// ─── OpenAI-compatible API call ───────────────────────────────────────────────
-
-interface OpenAIChatMessage {
-  role: "system" | "user" | "assistant";
-  content: string;
-}
-
-async function callAIEndpoint(
-  systemPrompt: string,
-  userQuery: string,
-  conversationHistory: OpenAIChatMessage[] = []
-): Promise<string> {
-  const endpoint = import.meta.env.VITE_AI_ENDPOINT;
-  const apiKey = import.meta.env.VITE_AI_API_KEY;
-  const model = import.meta.env.VITE_AI_MODEL || "gpt-3.5-turbo";
-
+async function callAIEndpoint(systemPrompt: string, userQuery: string): Promise<string> {
   if (!endpoint || !apiKey) {
     throw new Error("AI_NOT_CONFIGURED");
   }
 
-  const messages: OpenAIChatMessage[] = [
+  const messages = [
     { role: "system", content: systemPrompt },
-    ...conversationHistory.slice(-6),
     { role: "user", content: userQuery },
   ];
 
-  const res = await fetch(`${endpoint}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+  const res = await fetchWithTimeout(
+    `${endpoint}/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: 0.6,
+        max_tokens: 700,
+      }),
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      max_tokens: 800,
-      temperature: 0.7,
-    }),
-  });
+    AI_TIMEOUT_MS
+  );
 
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`AI API error ${res.status}: ${err}`);
+    const text = await res.text();
+    throw new Error(`AI_API_ERROR_${res.status}: ${text}`);
   }
 
   const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? "No response from AI model.";
+
+  return (
+    data?.choices?.[0]?.message?.content?.trim() ||
+    "No response generated."
+  );
 }
 
-// ─── Knowledge-base fallback formatter ───────────────────────────────────────
+// ─── Markdown fallback formatter ─────────────────────────
 
 function guidanceToMarkdown(guidance: GuidanceResponse): string {
-  const lines: string[] = [
+  return [
     `## ${guidance.title}`,
     "",
     guidance.summary,
     "",
-  ];
-
-  for (const section of guidance.sections) {
-    lines.push(`### ${section.heading}`);
-    for (const point of section.points) {
-      lines.push(`- ${point}`);
-    }
-    lines.push("");
-  }
-
-  if (guidance.sources.length > 0) {
-    lines.push("---");
-    lines.push(
-      `*Sources: ${guidance.sources.map((s) => s.name).join(", ")}*`
-    );
-    lines.push("");
-  }
-
-  lines.push(`> ⚠️ ${guidance.disclaimer}`);
-
-  return lines.join("\n");
+    ...guidance.sections.flatMap((s) => [
+      `### ${s.heading}`,
+      ...s.points.map((p) => `- ${p}`),
+      "",
+    ]),
+    guidance.sources.length
+      ? `---\nSources: ${guidance.sources.map((s) => s.name).join(", ")}`
+      : "",
+    "",
+    `> ⚠️ ${guidance.disclaimer}`,
+  ].join("\n");
 }
 
-// ─── Main exported function ───────────────────────────────────────────────────
+// ─── Main AI Function ────────────────────────────────────
 
 export async function askAI(request: AIRequest): Promise<AIResponse> {
   const { mode, query, farmRecords } = request;
-  const systemPrompt = buildSystemPrompt(mode, farmRecords);
 
   try {
+    const systemPrompt = buildSystemPrompt(mode, farmRecords);
     const content = await callAIEndpoint(systemPrompt, query);
-    return { content, source: "ai-model" };
-  } catch (err) {
-    if (err instanceof Error && err.message !== "AI_NOT_CONFIGURED") {
-      console.warn("[aiService] AI endpoint error, falling back to knowledge base:", err.message);
-    }
-  }
 
-  // Fallback: local knowledge base
-  const guidance = getGuidance(query, mode);
-  const content = guidanceToMarkdown(guidance);
-  return { content, guidance, source: "knowledge-base" };
+    return {
+      content,
+      source: "ai-model",
+    };
+  } catch (err: any) {
+    console.warn("[AI SERVICE] Falling back:", err.message);
+
+    // fallback ONLY if AI fails
+    const guidance = getGuidance(query, mode);
+    return {
+      content: guidanceToMarkdown(guidance),
+      guidance,
+      source: "knowledge-base",
+    };
+  }
 }
