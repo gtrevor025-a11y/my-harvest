@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { runAI } from "@/services/aiService";
 import { supabase } from "@/lib/supabaseClient";
+import { createFarmTask } from "@/services/farmService";
 
 export default function FarmScan() {
   const [image, setImage] = useState<File | null>(null);
@@ -25,25 +26,37 @@ export default function FarmScan() {
   }
 
   async function handleScan() {
-    if (!image) return;
+  if (!image) return;
 
-    setLoading(true);
+  setLoading(true);
 
-    try {
-      const url = await upload(image);
+  try {
+    const url = await upload(image);
 
-      const res = await runAI({
-        mode: "image",
-        imageUrl: url,
-      });
+    const res = await runAI({
+      mode: "image",
+      imageUrl: url,
+    });
 
-      setResult(res);
-    } catch {
-      setResult({ diagnosis: "Failed to analyze image" });
+    setResult(res);
+
+    // 🔥 CREATE TASK FROM RESULT
+    if (res?.actions?.length) {
+      for (const action of res.actions) {
+        await createFarmTask({
+          title: action,
+          priority: "high",
+          taskType: "ai_generated",
+        });
+      }
     }
 
-    setLoading(false);
+  } catch {
+    setResult({ diagnosis: "Failed to analyze image" });
   }
+
+  setLoading(false);
+}
 
   return (
     <div className="p-4 space-y-4">
