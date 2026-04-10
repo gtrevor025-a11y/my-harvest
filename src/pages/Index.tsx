@@ -23,24 +23,34 @@ const Index = () => {
   const navigate = useNavigate();
 
   const farmTypeEmoji: Record<string, string> = {
-    crop: "🌾", livestock: "🐄", poultry: "🐔", aquaculture: "🐟",
-    beekeeping: "🐝", fruit: "🥭", mixed: "🌿",
+    crop: "🌾",
+    livestock: "🐄",
+    poultry: "🐔",
+    aquaculture: "🐟",
+    beekeeping: "🐝",
+    fruit: "🥭",
+    mixed: "🌿",
   };
+
   const primaryType = user?.farmingActivities?.[0];
   const emoji = primaryType ? (farmTypeEmoji[primaryType] ?? "🌾") : "🌾";
 
   return (
     <AppLayout>
-      {/* Resolved: Added responsive padding for larger screens (lg:py-6) */}
       <div className="space-y-6 px-4 py-4 lg:py-6">
-        {/* Header */}
+
+        {/* HEADER */}
         <div>
           <p className="text-sm text-muted-foreground">
             {isAuthenticated ? getGreeting() : "Discover agriculture"}
           </p>
+
           <h1 className="text-2xl font-bold text-foreground">
-            {user ? `${user.name.split(" ")[0]} ${emoji}` : "Welcome to Harvest 🌾"}
+            {user
+              ? `${user.name.split(" ")[0]} ${emoji}`
+              : "Welcome to Harvest 🌾"}
           </h1>
+
           {user?.location && (
             <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
               <MapPin className="h-3 w-3" />
@@ -49,7 +59,7 @@ const Index = () => {
           )}
         </div>
 
-        {/* Guest banner */}
+        {/* GUEST BANNER */}
         {!isAuthenticated && (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
@@ -61,11 +71,17 @@ const Index = () => {
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
                   <Leaf className="h-6 w-6 text-primary-foreground" />
                 </div>
+
                 <div>
-                  <h2 className="text-sm font-bold text-primary-foreground">Join the Harvest Community</h2>
-                  <p className="text-xs text-primary-foreground/80">Manage your farm, connect with farmers, access markets</p>
+                  <h2 className="text-sm font-bold text-primary-foreground">
+                    Join the Harvest Community
+                  </h2>
+                  <p className="text-xs text-primary-foreground/80">
+                    Manage your farm, connect with farmers, access markets
+                  </p>
                 </div>
               </div>
+
               <div className="flex gap-2">
                 <button
                   onClick={() => navigate("/signup")}
@@ -73,6 +89,7 @@ const Index = () => {
                 >
                   Create Account <ArrowRight className="h-3 w-3" />
                 </button>
+
                 <button
                   onClick={() => navigate("/login")}
                   className="rounded-full border border-white/30 px-4 py-2 text-xs font-medium text-primary-foreground"
@@ -84,14 +101,28 @@ const Index = () => {
           </motion.div>
         )}
 
-        {/* Authenticated user sections — prioritized for action */}
+        {/* ========================= */}
+        {/* 🟢 ACTION LAYER (PRIORITY) */}
+        {/* ========================= */}
+
         {isAuthenticated && <QuickActions />}
-        <RegionalAlerts />
         {isAuthenticated && <TodaysTasks />}
+
+        {/* ========================= */}
+        {/* 🔴 RISK LAYER */}
+        {/* ========================= */}
+
+        <RegionalAlerts />
         <WeatherWidget />
+
+        {/* ========================= */}
+        {/* 🟡 INSIGHT LAYER */}
+        {/* ========================= */}
+
         {isAuthenticated && <FarmingAdvice />}
         <AgriNews />
         <SocialFeed />
+
       </div>
     </AppLayout>
   );
